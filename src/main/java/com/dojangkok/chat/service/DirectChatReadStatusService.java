@@ -1,6 +1,8 @@
 package com.dojangkok.chat.service;
 
 import com.dojangkok.chat.common.config.RabbitMQChatConfig;
+import com.dojangkok.chat.common.enums.Code;
+import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatMessage;
 import com.dojangkok.chat.domain.ChatReadStatus;
 import com.dojangkok.chat.domain.ChatRoom;
@@ -18,7 +20,7 @@ import java.time.Instant;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ChatReadStatusService {
+public class DirectChatReadStatusService {
 
     private final ChatReadStatusRepository chatReadStatusRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -52,7 +54,7 @@ public class ChatReadStatusService {
         markAsRead(userId, roomId, lastReadMessageId);
 
         ChatRoom room = chatRoomRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new IllegalArgumentException("채팅방을 찾을 수 없습니다: " + roomId));
+                .orElseThrow(() -> new GeneralException(Code.CHAT_ROOM_NOT_FOUND));
 
         String targetUserId = room.getParticipants().stream()
                 .filter(id -> !id.equals(userId))

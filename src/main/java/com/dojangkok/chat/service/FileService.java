@@ -1,10 +1,12 @@
 package com.dojangkok.chat.service;
 
+import com.dojangkok.chat.common.enums.Code;
+import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.FileAsset;
-import com.dojangkok.chat.dto.media.MediaCompleteRequest;
-import com.dojangkok.chat.dto.media.MediaUploadRequest;
-import com.dojangkok.chat.dto.media.MediaCompleteResponse;
-import com.dojangkok.chat.dto.media.MediaUploadResponse;
+import com.dojangkok.chat.dto.media.FileUploadCompleteRequest;
+import com.dojangkok.chat.dto.media.FileUploadRequest;
+import com.dojangkok.chat.dto.media.FileUploadCompleteResponse;
+import com.dojangkok.chat.dto.media.FileUploadResponse;
 import com.dojangkok.chat.repository.FileAssetRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MediaService {
+public class FileService {
 
     private static final long MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;   // 10MB
     private static final long MAX_VIDEO_SIZE_BYTES = 100 * 1024 * 1024;  // 100MB
@@ -41,32 +43,30 @@ public class MediaService {
     private final S3Service s3Service;
     private final FileAssetRepository fileAssetRepository;
 
-    public MediaUploadResponse generatePresignedUrls(String userId, MediaUploadRequest request) {
+    public FileUploadResponse generatePresignedUrls(String userId, FileUploadRequest request) {
         // 전체 검증
-        for (MediaUploadRequest.MediaUploadItemRequest item : request.getFileItems()) {
+        for (FileUploadRequest.FileUploadItemRequest item : request.getFileItems()) {
             String contentType = item.getContentType().toLowerCase();
 
             if (!isAllowedContentType(contentType)) {
-                throw new IllegalArgumentException(
-                        "허용되지 않는 파일 형식입니다: " + item.getFileName() + " (" + item.getContentType() + ")");
+                throw new GeneralException(Code.FILE_CONTENT_TYPE_NOT_ALLOWED);
             }
 
             long maxSize = getMaxSizeForContentType(contentType);
             if (item.getSizeBytes() > maxSize) {
-                throw new IllegalArgumentException(
-                        "파일 용량이 초과되었습니다: " + item.getFileName() + " (" + item.getSizeBytes() + " bytes)");
+                throw new GeneralException(Code.FILE_SIZE_EXCEEDED);
             }
         }
 
         // 검증 통과 후 일괄 발급
-        List<MediaUploadResponse.MediaUploadItem> items = new ArrayList<>();
+        List<FileUploadResponse.FileUploadItem> items = new ArrayList<>();
 
-        for (MediaUploadRequest.MediaUploadItemRequest item : request.getFileItems()) {
+        for (FileUploadRequest.FileUploadItemRequest item : request.getFileItems()) {
             String extension = extractExtension(item.getFileName());
             String mediaPrefix = getMediaPrefix(item.getContentType().toLowerCase());
             String fileKey = mediaPrefix + UUID.randomUUID() + extension;
 
-            String uploadUrl = s3Service.generatePresignedUploadUrl(fileKey, item.getContentType());
+            String presignedUrl = s3Service.generatePresignedUploadUrl(fileKey, item.getContentType());
 
             // FileAsset UPLOADING 저장
             FileAsset fileAsset = fileAssetRepository.save(FileAsset.builder()
@@ -77,18 +77,18 @@ public class MediaService {
                     .originalFilename(item.getFileName())
                     .build());
 
-            items.add(MediaUploadResponse.MediaUploadItem.builder()
+            items.add(FileUploadResponse.FileUploadItem.builder()
                     .fileAssetId(fileAsset.getId())
                     .fileKey(fileKey)
-                    .uploadUrl(uploadUrl)
+                    .presignedUrl(presignedUrl)
                     .build());
         }
 
         log.info("Presigned URL 발급 완료: {}개, roomId={}", items.size(), request.getRoomId());
-        return MediaUploadResponse.builder().fileItems(items).build();
+        return FileUploadResponse.builder().fileItems(items).build();
     }
 
-    public MediaCompleteResponse completeFileUpload(MediaCompleteRequest request) {
+    public FileUploadCompleteResponse completeFileUpload(FileUploadCompleteRequest request) {
         List<String> fileAssetIds = request.getFileAssetIds();
 
         // FileAsset ID로 조회
@@ -99,7 +99,7 @@ public class MediaService {
         // 존재 여부 검증
         for (String fileAssetId : fileAssetIds) {
             if (!fileAssetMap.containsKey(fileAssetId)) {
-                throw new IllegalArgumentException("존재하지 않는 파일입니다: fileAssetId=" + fileAssetId);
+                throw new GeneralException(Code.FILE_NOT_FOUND);
             }
         }
 
@@ -132,7 +132,7 @@ public class MediaService {
         }
 
         // 검증 수행
-        List<MediaCompleteResponse.MediaCompleteItem> results = new ArrayList<>();
+        List<FileUploadCompleteResponse.FileUploadCompleteItem> results = new ArrayList<>();
 
         for (String fileAssetId : fileAssetIds) {
             FileAsset fileAsset = fileAssetMap.get(fileAssetId);
@@ -140,11 +140,12 @@ public class MediaService {
             // 이미 완료된 경우
             if (fileAsset.getStatus() == FileAsset.FileAssetStatus.COMPLETED) {
                 String downloadUrl = s3Service.generatePresignedDownloadUrl(fileAsset.getFileKey());
-                results.add(MediaCompleteResponse.MediaCompleteItem.builder()
+                results.add(FileUploadCompleteResponse.FileUploadCompleteItem.builder()
+                        .fileAssetId(fileAsset.getId())
                         .fileKey(fileAsset.getFileKey())
-                        .downloadUrl(downloadUrl)
-                        .contentType(fileAsset.getContentType())
-                        .fileSize(fileAsset.getFileSize())
+                        .fileType(fileAsset.getContentType())
+                        .status(fileAsset.getStatus().name())
+                        .presignedUrl(downloadUrl)
                         .build());
                 continue;
             }
@@ -154,7 +155,7 @@ public class MediaService {
             // S3에 파일이 없는 경우
             if (headResponse == null || headResponse.isEmpty()) {
                 rollbackAll(fileAssets);
-                throw new IllegalArgumentException("S3에 파일이 업로드되지 않았습니다: fileAssetId=" + fileAssetId);
+                throw new GeneralException(Code.FILE_UPLOAD_NOT_COMPLETED);
             }
 
             HeadObjectResponse head = headResponse.get();
@@ -165,25 +166,25 @@ public class MediaService {
             long maxSize = getMaxSizeForContentType(actualContentType.toLowerCase());
             if (actualSize > maxSize) {
                 rollbackAll(fileAssets);
-                throw new IllegalArgumentException("파일 용량이 초과되었습니다: fileAssetId=" + fileAssetId + ", size=" + actualSize);
+                throw new GeneralException(Code.FILE_SIZE_EXCEEDED);
             }
 
             // Content-Type 위변조 검증
             if (!fileAsset.getContentType().equalsIgnoreCase(actualContentType)) {
                 rollbackAll(fileAssets);
-                throw new IllegalArgumentException("파일 형식이 일치하지 않습니다: fileAssetId=" + fileAssetId
-                        + ", declared=" + fileAsset.getContentType() + ", actual=" + actualContentType);
+                throw new GeneralException(Code.FILE_CONTENT_TYPE_MISMATCH);
             }
 
             // 검증 통과 — COMPLETED 처리 + Presigned Download URL 발급
             fileAsset.markCompleted(actualSize);
             String downloadUrl = s3Service.generatePresignedDownloadUrl(fileAsset.getFileKey());
 
-            results.add(MediaCompleteResponse.MediaCompleteItem.builder()
+            results.add(FileUploadCompleteResponse.FileUploadCompleteItem.builder()
+                    .fileAssetId(fileAsset.getId())
                     .fileKey(fileAsset.getFileKey())
-                    .downloadUrl(downloadUrl)
-                    .contentType(fileAsset.getContentType())
-                    .fileSize(actualSize)
+                    .fileType(fileAsset.getContentType())
+                    .status(fileAsset.getStatus().name())
+                    .presignedUrl(downloadUrl)
                     .build());
         }
 
@@ -191,7 +192,7 @@ public class MediaService {
         fileAssetRepository.saveAll(fileAssets);
         log.info("파일 업로드 완료 검증 성공: {}개", results.size());
 
-        return MediaCompleteResponse.builder().fileItems(results).build();
+        return FileUploadCompleteResponse.builder().fileItems(results).build();
     }
 
     private void rollbackAll(List<FileAsset> fileAssets) {
