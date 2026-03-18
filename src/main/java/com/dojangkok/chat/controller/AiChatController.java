@@ -18,7 +18,7 @@ import reactor.core.publisher.Flux;
 import java.time.Instant;
 
 @RestController
-@RequestMapping("/api/v3/ai-chat")
+@RequestMapping("/api/chat/v3/ai-chat")
 @RequiredArgsConstructor
 public class AiChatController {
 

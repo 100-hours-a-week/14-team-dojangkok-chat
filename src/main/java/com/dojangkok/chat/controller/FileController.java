@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v3/direct-chat/files")
+@RequestMapping("/api/chat/v3/direct-chat/files")
 @RequiredArgsConstructor
 public class FileController {
 
