@@ -7,15 +7,15 @@ import java.util.List;
 
 @Getter
 @Builder
-public class MediaUploadResponse {
+public class FileUploadResponse {
 
-    private final List<MediaUploadItem> fileItems;
+    private final List<FileUploadItem> fileItems;
 
     @Getter
     @Builder
-    public static class MediaUploadItem {
+    public static class FileUploadItem {
         private final String fileAssetId;
+        private final String presignedUrl;
         private final String fileKey;
-        private final String uploadUrl;
     }
 }
