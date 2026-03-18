@@ -2,6 +2,7 @@ package com.dojangkok.chat.auth.config;
 
 import com.dojangkok.chat.auth.jwt.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -38,6 +39,7 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers("/test-ws.html").permitAll()
                         .requestMatchers("/ws/chat/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
