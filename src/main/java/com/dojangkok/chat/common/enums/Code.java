@@ -84,7 +84,14 @@ public enum Code {
 
     // AI 서비스 관련 오류
     AI_SERVICE_ERROR(HttpStatus.BAD_GATEWAY.value(), "AI_SERVICE_ERROR", "AI 서비스에서 오류가 발생하였습니다."),
-    AI_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE.value(), "AI_SERVICE_UNAVAILABLE", "AI 서비스에 연결할 수 없습니다.");
+    AI_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE.value(), "AI_SERVICE_UNAVAILABLE", "AI 서비스에 연결할 수 없습니다."),
+
+    // 채팅 관련 오류
+    CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND.value(), "CHAT_ROOM_NOT_FOUND", "채팅방을 찾을 수 없습니다."),
+    CHAT_ROOM_ACCESS_DENIED(HttpStatus.FORBIDDEN.value(), "CHAT_ROOM_ACCESS_DENIED", "해당 채팅방에 대한 권한이 없습니다."),
+    CHAT_ROOM_TYPE_MISMATCH(HttpStatus.BAD_REQUEST.value(), "CHAT_ROOM_TYPE_MISMATCH", "채팅방 타입이 일치하지 않습니다."),
+    CHAT_SELF_ROOM_NOT_ALLOWED(HttpStatus.BAD_REQUEST.value(), "CHAT_SELF_ROOM_NOT_ALLOWED", "자기 자신과는 채팅방을 생성할 수 없습니다."),
+    CHAT_INVALID_CONTENT_TYPE(HttpStatus.BAD_REQUEST.value(), "CHAT_INVALID_CONTENT_TYPE", "지원하지 않는 메시지 타입입니다.");
 
     private final int status;
     private final String code;

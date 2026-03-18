@@ -1,5 +1,7 @@
 package com.dojangkok.chat.converter;
 
+import com.dojangkok.chat.common.enums.Code;
+import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.dto.MessageContent;
 import com.dojangkok.chat.dto.MessageContent.ImageContent;
 import com.dojangkok.chat.dto.MessageContent.TextContent;
@@ -32,7 +34,7 @@ public class MessageContentReadConverter implements Converter<Document, MessageC
                     source.getInteger("height", 0),
                     source.getLong("size")
             );
-            default -> throw new IllegalArgumentException("Unknown content type: " + type);
+            default -> throw new GeneralException(Code.CHAT_INVALID_CONTENT_TYPE);
         };
     }
 }

@@ -17,4 +17,6 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
     List<ChatRoom> findByParticipantsContainingOrderByLastMessage_CreatedAtDesc(String userId);
 
     List<ChatRoom> findByParticipantsContainingAndLastMessageIsNotNullOrderByLastMessage_CreatedAtDesc(String userId);
+
+    Optional<ChatRoom> findByTypeAndParticipantsContainingAndEasyContractId(String type, String userId, String easyContractId);
 }

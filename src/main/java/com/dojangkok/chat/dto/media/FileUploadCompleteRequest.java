@@ -7,7 +7,7 @@ import java.util.List;
 
 @Getter
 @NoArgsConstructor
-public class MediaCompleteRequest {
+public class FileUploadCompleteRequest {
 
     private List<String> fileAssetIds;
 }
