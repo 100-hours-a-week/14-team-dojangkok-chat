@@ -14,7 +14,8 @@ import java.util.List;
 @Document(collection = "chat_rooms")
 @CompoundIndexes({
         @CompoundIndex(name = "idx_type_participants_property", def = "{'type': 1, 'participants': 1, 'propertyId': 1}", unique = true),
-        @CompoundIndex(name = "idx_participants_lastmsg", def = "{'participants': 1, 'lastMessage.createdAt': -1}")
+        @CompoundIndex(name = "idx_participants_lastmsg", def = "{'participants': 1, 'lastMessage.createdAt': -1}"),
+        @CompoundIndex(name = "idx_type_participants_easycontract", def = "{'type': 1, 'participants': 1, 'easyContractId': 1}", unique = true, sparse = true)
 })
 public class ChatRoom {
 
@@ -28,6 +29,9 @@ public class ChatRoom {
     private String propertyId;
     private String propertyTitle;
     private String propertyImageUrl;
+
+    // AI 채팅방용 — 쉬운 계약서 ID
+    private String easyContractId;
 
     // 참여자 프로필 스냅샷
     private List<ParticipantInfo> participantProfiles;
@@ -55,6 +59,7 @@ public class ChatRoom {
     @Builder
     public ChatRoom(String roomId, String type, List<String> participants,
                     String propertyId, String propertyTitle, String propertyImageUrl,
+                    String easyContractId,
                     List<ParticipantInfo> participantProfiles,
                     LastMessage lastMessage, Instant createdAt) {
         this.roomId = roomId;
@@ -63,6 +68,7 @@ public class ChatRoom {
         this.propertyId = propertyId;
         this.propertyTitle = propertyTitle;
         this.propertyImageUrl = propertyImageUrl;
+        this.easyContractId = easyContractId;
         this.participantProfiles = participantProfiles;
         this.lastMessage = lastMessage;
         this.createdAt = createdAt;

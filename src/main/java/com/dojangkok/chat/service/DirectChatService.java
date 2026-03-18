@@ -1,6 +1,8 @@
 package com.dojangkok.chat.service;
 
 import com.dojangkok.chat.common.config.RabbitMQChatConfig;
+import com.dojangkok.chat.common.enums.Code;
+import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatMessage;
 import com.dojangkok.chat.domain.ChatRoom;
 import com.dojangkok.chat.dto.MessageContent;
@@ -23,16 +25,16 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ChatMessageService {
+public class DirectChatService {
 
     private final ChatMessageRepository chatMessageRepository;
-    private final ChatRoomService chatRoomService;
-    private final ChatReadStatusService chatReadStatusService;
+    private final DirectChatRoomService directChatRoomService;
+    private final DirectChatReadStatusService directChatReadStatusService;
     private final ChatMessageMapper chatMessageMapper;
     private final RabbitTemplate rabbitTemplate;
 
     public void sendMessage(String senderId, SendMessageRequest request) {
-        ChatRoom room = chatRoomService.getRoomByRoomId(request.getRoomId());
+        ChatRoom room = directChatRoomService.getRoomByRoomId(request.getRoomId());
 
         MessageContent content = createContent(request);
         String preview = getPreviewText(request);
@@ -50,10 +52,10 @@ public class ChatMessageService {
         chatMessageRepository.save(message);
 
         // 발신자 읽음 처리 (메시지를 보냈으면 해당 방의 모든 메시지를 읽은 것)
-        chatReadStatusService.markAsRead(senderId, request.getRoomId(), message.getMessageId());
+        directChatReadStatusService.markAsRead(senderId, request.getRoomId(), message.getMessageId());
 
         // ChatRoom lastMessage 업데이트
-        chatRoomService.updateLastMessage(request.getRoomId(), ChatRoom.LastMessage.builder()
+        directChatRoomService.updateLastMessage(request.getRoomId(), ChatRoom.LastMessage.builder()
                 .content(preview)
                 .contentType(request.getContentType())
                 .senderId(senderId)
@@ -83,11 +85,17 @@ public class ChatMessageService {
     }
 
     public ChatMessageListResponse getMessagesWithMarkRead(String userId, String roomId, Instant before, int size) {
+        ChatRoom room = directChatRoomService.getRoomByRoomId(roomId);
+
+        if (!room.getParticipants().contains(userId)) {
+            throw new GeneralException(Code.CHAT_ROOM_ACCESS_DENIED);
+        }
+
         List<ChatMessage> messages = getMessages(roomId, before, size);
 
         if (!messages.isEmpty()) {
             ChatMessage newest = messages.getFirst();
-            chatReadStatusService.markAsReadAndNotify(userId, roomId, newest.getMessageId());
+            directChatReadStatusService.markAsReadAndNotify(userId, roomId, newest.getMessageId());
         }
 
         List<ChatMessageResponse> messageResponses = messages.stream()
@@ -115,7 +123,7 @@ public class ChatMessageService {
             case "VIDEO" -> new MessageContent.VideoContent(
                     request.getUrl(),
                     request.getDuration(), request.getWidth(), request.getHeight(), request.getSize());
-            default -> throw new IllegalArgumentException("지원하지 않는 contentType: " + request.getContentType());
+            default -> throw new GeneralException(Code.CHAT_INVALID_CONTENT_TYPE);
         };
     }
 

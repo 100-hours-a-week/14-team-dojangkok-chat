@@ -1,5 +1,7 @@
 package com.dojangkok.chat.service;
 
+import com.dojangkok.chat.common.enums.Code;
+import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatReadStatus;
 import com.dojangkok.chat.domain.ChatRoom;
 import com.dojangkok.chat.dto.cache.CachedPropertyInfo;
@@ -26,58 +28,53 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ChatRoomService {
+public class DirectChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
-    private final ChatReadStatusService chatReadStatusService;
+    private final DirectChatReadStatusService directChatReadStatusService;
     private final ChatReadStatusRepository chatReadStatusRepository;
     private final UserProfileCacheService userProfileCacheService;
     private final PropertyCacheService propertyCacheService;
     private final ChatRoomMapper chatRoomMapper;
 
-    public CreateRoomResponse createDirectRoom(String userId, CreateRoomRequest request) {
+    public CreateRoomResponse getOrCreateDirectChatRoom(String userId, CreateRoomRequest request) {
         if (userId.equals(request.getTargetUserId())) {
-            throw new IllegalArgumentException("자기 자신과는 채팅방을 생성할 수 없습니다.");
+            throw new GeneralException(Code.CHAT_SELF_ROOM_NOT_ALLOWED);
         }
 
         List<String> participants = Stream.of(userId, request.getTargetUserId()).sorted().toList();
 
-        // 기존 방이 있는지 확인
-        var existingRoom = chatRoomRepository.findByTypeAndParticipantsAndPropertyId(
-                "DIRECT", participants, request.getPropertyId());
+        ChatRoom room = chatRoomRepository
+                .findByTypeAndParticipantsAndPropertyId("DIRECT", participants, request.getPropertyId())
+                .orElseGet(() -> {
+                    CachedUserProfile myProfile = userProfileCacheService.getProfile(userId);
+                    CachedUserProfile targetProfile = userProfileCacheService.getProfile(request.getTargetUserId());
+                    CachedPropertyInfo property = propertyCacheService.getProperty(request.getPropertyId());
 
-        if (existingRoom.isPresent()) {
-            return chatRoomMapper.toCreateResponse(existingRoom.get(), userId);
-        }
-
-        // 새 방 생성 — 캐시에서 프로필/매물 조회
-        CachedUserProfile myProfile = userProfileCacheService.getProfile(userId);
-        CachedUserProfile targetProfile = userProfileCacheService.getProfile(request.getTargetUserId());
-        CachedPropertyInfo property = propertyCacheService.getProperty(request.getPropertyId());
-
-        ChatRoom room = chatRoomRepository.save(
-                ChatRoom.builder()
-                        .roomId(UUID.randomUUID().toString())
-                        .type("DIRECT")
-                        .participants(participants)
-                        .propertyId(property.getPropertyId())
-                        .propertyTitle(property.getTitle())
-                        .propertyImageUrl(property.getImageUrl())
-                        .participantProfiles(List.of(
-                                ChatRoom.ParticipantInfo.builder()
-                                        .userId(myProfile.getUserId())
-                                        .nickname(myProfile.getNickname())
-                                        .profileImageUrl(myProfile.getProfileImageUrl())
-                                        .build(),
-                                ChatRoom.ParticipantInfo.builder()
-                                        .userId(targetProfile.getUserId())
-                                        .nickname(targetProfile.getNickname())
-                                        .profileImageUrl(targetProfile.getProfileImageUrl())
-                                        .build()
-                        ))
-                        .createdAt(Instant.now())
-                        .build()
-        );
+                    return chatRoomRepository.save(
+                            ChatRoom.builder()
+                                    .roomId(UUID.randomUUID().toString())
+                                    .type("DIRECT")
+                                    .participants(participants)
+                                    .propertyId(property.getPropertyId())
+                                    .propertyTitle(property.getTitle())
+                                    .propertyImageUrl(property.getImageUrl())
+                                    .participantProfiles(List.of(
+                                            ChatRoom.ParticipantInfo.builder()
+                                                    .userId(myProfile.getUserId())
+                                                    .nickname(myProfile.getNickname())
+                                                    .profileImageUrl(myProfile.getProfileImageUrl())
+                                                    .build(),
+                                            ChatRoom.ParticipantInfo.builder()
+                                                    .userId(targetProfile.getUserId())
+                                                    .nickname(targetProfile.getNickname())
+                                                    .profileImageUrl(targetProfile.getProfileImageUrl())
+                                                    .build()
+                                    ))
+                                    .createdAt(Instant.now())
+                                    .build()
+                    );
+                });
 
         return chatRoomMapper.toCreateResponse(room, userId);
     }
@@ -87,7 +84,7 @@ public class ChatRoomService {
 
         List<ChatRoomResponse> roomResponses = rooms.stream()
                 .map(room -> {
-                    long unreadCount = chatReadStatusService.getUnreadCount(userId, room.getRoomId());
+                    long unreadCount = directChatReadStatusService.getUnreadCount(userId, room.getRoomId());
                     return chatRoomMapper.toResponse(room, userId, unreadCount);
                 })
                 .toList();
@@ -97,6 +94,10 @@ public class ChatRoomService {
 
     public ChatRoomDetailResponse getRoomDetail(String userId, String roomId) {
         ChatRoom room = getRoomByRoomId(roomId);
+
+        if (!room.getParticipants().contains(userId)) {
+            throw new GeneralException(Code.CHAT_ROOM_ACCESS_DENIED);
+        }
 
         // Redis Look-Aside: 최신 프로필/매물 정보 조회
         List<CachedUserProfile> latestProfiles = room.getParticipants().stream()
@@ -180,8 +181,7 @@ public class ChatRoomService {
         if (existing == null || latest == null) return true;
         if (existing.size() != latest.size()) return true;
 
-        for (int i = 0; i < existing.size(); i++) {
-            ChatRoom.ParticipantInfo old = existing.get(i);
+        for (ChatRoom.ParticipantInfo old : existing) {
             ChatRoom.ParticipantInfo updated = latest.stream()
                     .filter(p -> Objects.equals(p.getUserId(), old.getUserId()))
                     .findFirst()
@@ -202,7 +202,7 @@ public class ChatRoomService {
 
     public ChatRoom getRoomByRoomId(String roomId) {
         return chatRoomRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new IllegalArgumentException("채팅방을 찾을 수 없습니다: " + roomId));
+                .orElseThrow(() -> new GeneralException(Code.CHAT_ROOM_NOT_FOUND));
     }
 
     public void updateLastMessage(String roomId, ChatRoom.LastMessage lastMessage) {
