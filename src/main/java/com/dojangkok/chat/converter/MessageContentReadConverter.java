@@ -15,26 +15,29 @@ public class MessageContentReadConverter implements Converter<Document, MessageC
 
     @Override
     public MessageContent convert(Document source) {
-        String type = source.getString("_contentType");
+        if (source.containsKey("text")) {
+            return new TextContent(source.getString("text"));
+        }
 
-        return switch (type) {
-            case "TEXT" -> new TextContent(
-                    source.getString("text")
-            );
-            case "IMAGE" -> new ImageContent(
-                    source.getString("url"),
-                    source.getInteger("width", 0),
-                    source.getInteger("height", 0),
-                    source.getLong("size")
-            );
-            case "VIDEO" -> new VideoContent(
+        if (source.containsKey("duration")) {
+            return new VideoContent(
                     source.getString("url"),
                     source.getInteger("duration", 0),
                     source.getInteger("width", 0),
                     source.getInteger("height", 0),
                     source.getLong("size")
             );
-            default -> throw new GeneralException(Code.CHAT_INVALID_CONTENT_TYPE);
-        };
+        }
+
+        if (source.containsKey("url")) {
+            return new ImageContent(
+                    source.getString("url"),
+                    source.getInteger("width", 0),
+                    source.getInteger("height", 0),
+                    source.getLong("size")
+            );
+        }
+
+        throw new GeneralException(Code.CHAT_INVALID_CONTENT_TYPE);
     }
 }

@@ -17,18 +17,15 @@ public class MessageContentWriteConverter implements Converter<MessageContent, D
 
         switch (source) {
             case TextContent text -> {
-                doc.put("_contentType", "TEXT");
                 doc.put("text", text.text());
             }
             case ImageContent image -> {
-                doc.put("_contentType", "IMAGE");
                 doc.put("url", image.url());
                 doc.put("width", image.width());
                 doc.put("height", image.height());
                 doc.put("size", image.size());
             }
             case VideoContent video -> {
-                doc.put("_contentType", "VIDEO");
                 doc.put("url", video.url());
                 doc.put("duration", video.duration());
                 doc.put("width", video.width());
