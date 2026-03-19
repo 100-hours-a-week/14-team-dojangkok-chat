@@ -16,6 +16,7 @@ import com.dojangkok.chat.repository.ChatReadStatusRepository;
 import com.dojangkok.chat.repository.ChatRoomRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -44,39 +45,47 @@ public class DirectChatRoomService {
 
         List<String> participants = Stream.of(userId, request.getTargetUserId()).sorted().toList();
 
-        ChatRoom room = chatRoomRepository
-                .findByTypeAndParticipantsAndPropertyId("DIRECT", participants, request.getPropertyId())
-                .orElseGet(() -> {
-                    CachedUserProfile myProfile = userProfileCacheService.getProfile(userId);
-                    CachedUserProfile targetProfile = userProfileCacheService.getProfile(request.getTargetUserId());
-                    CachedPropertyInfo property = propertyCacheService.getProperty(request.getPropertyId());
+        try {
+            ChatRoom room = chatRoomRepository
+                    .findExistingRoom("DIRECT", participants, request.getPropertyId())
+                    .orElseGet(() -> {
+                        CachedUserProfile myProfile = userProfileCacheService.getProfile(userId);
+                        CachedUserProfile targetProfile = userProfileCacheService.getProfile(request.getTargetUserId());
+                        CachedPropertyInfo property = propertyCacheService.getProperty(request.getPropertyId());
 
-                    return chatRoomRepository.save(
-                            ChatRoom.builder()
-                                    .roomId(UUID.randomUUID().toString())
-                                    .type("DIRECT")
-                                    .participants(participants)
-                                    .propertyId(property.getPropertyId())
-                                    .propertyTitle(property.getTitle())
-                                    .propertyImageUrl(property.getImageUrl())
-                                    .participantProfiles(List.of(
-                                            ChatRoom.ParticipantInfo.builder()
-                                                    .userId(myProfile.getUserId())
-                                                    .nickname(myProfile.getNickname())
-                                                    .profileImageUrl(myProfile.getProfileImageUrl())
-                                                    .build(),
-                                            ChatRoom.ParticipantInfo.builder()
-                                                    .userId(targetProfile.getUserId())
-                                                    .nickname(targetProfile.getNickname())
-                                                    .profileImageUrl(targetProfile.getProfileImageUrl())
-                                                    .build()
-                                    ))
-                                    .createdAt(Instant.now())
-                                    .build()
-                    );
-                });
+                        return chatRoomRepository.save(
+                                ChatRoom.builder()
+                                        .roomId(UUID.randomUUID().toString())
+                                        .type("DIRECT")
+                                        .participants(participants)
+                                        .propertyId(property.getPropertyId())
+                                        .propertyTitle(property.getTitle())
+                                        .propertyImageUrl(property.getImageUrl())
+                                        .participantProfiles(List.of(
+                                                ChatRoom.ParticipantInfo.builder()
+                                                        .userId(myProfile.getUserId())
+                                                        .nickname(myProfile.getNickname())
+                                                        .profileImageUrl(myProfile.getProfileImageUrl())
+                                                        .build(),
+                                                ChatRoom.ParticipantInfo.builder()
+                                                        .userId(targetProfile.getUserId())
+                                                        .nickname(targetProfile.getNickname())
+                                                        .profileImageUrl(targetProfile.getProfileImageUrl())
+                                                        .build()
+                                        ))
+                                        .createdAt(Instant.now())
+                                        .build()
+                        );
+                    });
 
-        return chatRoomMapper.toCreateResponse(room, userId);
+            return chatRoomMapper.toCreateResponse(room, userId);
+        } catch (DuplicateKeyException e) {
+            log.info("채팅방 동시 생성 감지 → 기존 방 반환: userId={}, propertyId={}", userId, request.getPropertyId());
+            ChatRoom existingRoom = chatRoomRepository
+                    .findExistingRoom("DIRECT", participants, request.getPropertyId())
+                    .orElseThrow(() -> new GeneralException(Code.CHAT_ROOM_NOT_FOUND));
+            return chatRoomMapper.toCreateResponse(existingRoom, userId);
+        }
     }
 
     public ChatRoomListResponse getMyRooms(String userId) {

@@ -7,13 +7,11 @@ import com.dojangkok.chat.domain.ChatRoom;
 import com.dojangkok.chat.dto.ai.AiChatMessageListResponse;
 import com.dojangkok.chat.dto.ai.AiChatMessageResponse;
 import com.dojangkok.chat.dto.ai.AiRoomResponse;
-import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
-import com.dojangkok.chat.dto.chatroom.ChatMessageResponse;
 import com.dojangkok.chat.mapper.AiChatRoomMapper;
-import com.dojangkok.chat.mapper.ChatMessageMapper;
 import com.dojangkok.chat.repository.ChatRoomRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -31,23 +29,30 @@ public class AiChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final DirectChatRoomService directChatRoomService;
     private final DirectChatService directChatService;
-    private final ChatMessageMapper chatMessageMapper;
     private final AiChatRoomMapper aiChatRoomMapper;
 
     public AiRoomResponse getOrCreateAiChatRoom(String userId, String easyContractId) {
-        ChatRoom room = chatRoomRepository
-                .findByTypeAndParticipantsContainingAndEasyContractId(ROOM_TYPE_AI, userId, easyContractId)
-                .orElseGet(() -> {
-                    ChatRoom newRoom = ChatRoom.builder()
-                            .roomId(UUID.randomUUID().toString())
-                            .type(ROOM_TYPE_AI)
-                            .participants(List.of(userId, AI_SENDER_ID))
-                            .easyContractId(easyContractId)
-                            .createdAt(Instant.now())
-                            .build();
-                    return chatRoomRepository.save(newRoom);
-                });
-        return aiChatRoomMapper.toAiRoomResponse(room);
+        try {
+            ChatRoom room = chatRoomRepository
+                    .findByTypeAndParticipantsContainingAndEasyContractId(ROOM_TYPE_AI, userId, easyContractId)
+                    .orElseGet(() -> {
+                        ChatRoom newRoom = ChatRoom.builder()
+                                .roomId(UUID.randomUUID().toString())
+                                .type(ROOM_TYPE_AI)
+                                .participants(List.of(userId, AI_SENDER_ID))
+                                .easyContractId(easyContractId)
+                                .createdAt(Instant.now())
+                                .build();
+                        return chatRoomRepository.save(newRoom);
+                    });
+            return aiChatRoomMapper.toAiRoomResponse(room);
+        } catch (DuplicateKeyException e) {
+            log.info("AI 채팅방 동시 생성 감지 → 기존 방 반환: userId={}, easyContractId={}", userId, easyContractId);
+            ChatRoom existingRoom = chatRoomRepository
+                    .findByTypeAndParticipantsContainingAndEasyContractId(ROOM_TYPE_AI, userId, easyContractId)
+                    .orElseThrow(() -> new GeneralException(Code.CHAT_ROOM_NOT_FOUND));
+            return aiChatRoomMapper.toAiRoomResponse(existingRoom);
+        }
     }
 
     public AiChatMessageListResponse getMessages(String userId, String roomId, Instant before, int size) {

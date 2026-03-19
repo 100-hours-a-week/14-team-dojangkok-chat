@@ -9,13 +9,17 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Getter
 @Document(collection = "chat_rooms")
 @CompoundIndexes({
-        @CompoundIndex(name = "idx_type_participants_property", def = "{'type': 1, 'participants': 1, 'propertyId': 1}", unique = true),
+        @CompoundIndex(name = "idx_type_participants_property", def = "{'type': 1, 'participants': 1, 'propertyId': 1}"),
         @CompoundIndex(name = "idx_participants_lastmsg", def = "{'participants': 1, 'lastMessage.createdAt': -1}"),
-        @CompoundIndex(name = "idx_type_participants_easycontract", def = "{'type': 1, 'participants': 1, 'easyContractId': 1}", unique = true, sparse = true)
+        @CompoundIndex(name = "idx_type_participants_easycontract", def = "{'type': 1, 'participants': 1, 'easyContractId': 1}", sparse = true),
+
+        // 중복 방지용: 정렬된 참가자 문자열 + 타입 + 매물ID로 유니크 보장
+        @CompoundIndex(name = "idx_unique_room", def = "{'type': 1, 'participantsKey': 1, 'propertyId': 1}", unique = true, sparse = true)
 })
 public class ChatRoom {
 
@@ -24,6 +28,8 @@ public class ChatRoom {
     private String roomId;
     private String type;
     private List<String> participants;
+
+    private String participantsKey;
 
     // 매물 스냅샷
     private String propertyId;
@@ -65,6 +71,9 @@ public class ChatRoom {
         this.roomId = roomId;
         this.type = type;
         this.participants = participants;
+        this.participantsKey = participants != null
+                ? participants.stream().sorted().collect(Collectors.joining(":"))
+                : null;
         this.propertyId = propertyId;
         this.propertyTitle = propertyTitle;
         this.propertyImageUrl = propertyImageUrl;
