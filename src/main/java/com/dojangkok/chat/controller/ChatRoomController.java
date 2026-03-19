@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 
 @RestController
-@RequestMapping("/api/v3/direct-chat/rooms")
+@RequestMapping("/api/chat/v3/direct-chat/rooms")
 @RequiredArgsConstructor
 public class ChatRoomController {
 
