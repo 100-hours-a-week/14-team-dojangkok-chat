@@ -4,6 +4,8 @@ import com.dojangkok.chat.common.enums.Code;
 import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatMessage;
 import com.dojangkok.chat.domain.ChatRoom;
+import com.dojangkok.chat.dto.ai.AiChatMessageListResponse;
+import com.dojangkok.chat.dto.ai.AiChatMessageResponse;
 import com.dojangkok.chat.dto.ai.AiRoomResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageResponse;
@@ -45,26 +47,20 @@ public class AiChatRoomService {
                             .build();
                     return chatRoomRepository.save(newRoom);
                 });
-        return aiChatRoomMapper.toAiRoomResponse(room, userId);
+        return aiChatRoomMapper.toAiRoomResponse(room);
     }
 
-    public AiRoomResponse getRoomDetail(String userId, String roomId) {
-        ChatRoom room = directChatRoomService.getRoomByRoomId(roomId);
-        validateAiRoomAccess(room, userId);
-        return aiChatRoomMapper.toAiRoomResponse(room, userId);
-    }
-
-    public ChatMessageListResponse getMessages(String userId, String roomId, Instant before, int size) {
+    public AiChatMessageListResponse getMessages(String userId, String roomId, Instant before, int size) {
         ChatRoom room = directChatRoomService.getRoomByRoomId(roomId);
         validateAiRoomAccess(room, userId);
 
         List<ChatMessage> messages = directChatService.getMessages(roomId, before, size);
 
-        List<ChatMessageResponse> messageResponses = messages.stream()
-                .map(msg -> chatMessageMapper.toResponse(msg, userId))
+        List<AiChatMessageResponse> messageResponses = messages.stream()
+                .map(aiChatRoomMapper::toAiMessageResponse)
                 .toList();
 
-        return chatMessageMapper.toListResponse(messageResponses, size);
+        return aiChatRoomMapper.toAiMessageListResponse(messageResponses, size);
     }
 
     private void validateAiRoomAccess(ChatRoom room, String userId) {
