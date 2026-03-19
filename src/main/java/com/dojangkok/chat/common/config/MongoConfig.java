@@ -2,6 +2,7 @@ package com.dojangkok.chat.common.config;
 
 import com.dojangkok.chat.converter.MessageContentReadConverter;
 import com.dojangkok.chat.converter.MessageContentWriteConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -28,7 +29,9 @@ public class MongoConfig {
     public MappingMongoConverter mappingMongoConverter(
             MongoDatabaseFactory factory,
             MongoMappingContext context,
-            MongoCustomConversions conversions) {
+            MongoCustomConversions conversions,
+            @Value("${spring.data.mongodb.auto-index-creation:false}") boolean autoIndexCreation) {
+        context.setAutoIndexCreation(autoIndexCreation);
         DefaultDbRefResolver dbRefResolver = new DefaultDbRefResolver(factory);
         MappingMongoConverter converter = new MappingMongoConverter(dbRefResolver, context);
         converter.setCustomConversions(conversions);
