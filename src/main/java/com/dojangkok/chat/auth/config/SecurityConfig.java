@@ -40,8 +40,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
-                        .requestMatchers("/test-ws.html").permitAll()
-                        .requestMatchers("/ws/chat/**").permitAll()
+                        .requestMatchers("/api/chat/ws").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
