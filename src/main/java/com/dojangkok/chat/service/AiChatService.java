@@ -21,6 +21,7 @@ import reactor.core.publisher.Flux;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Service
@@ -62,6 +63,8 @@ public class AiChatService {
         chatMessageRepository.save(userMessage);
 
         StringBuilder fullResponse = new StringBuilder();
+        // cancel/complete/error 중 한 번만 저장되도록 보장
+        AtomicBoolean saved = new AtomicBoolean(false);
 
         return webClientBuilder.build()
                 .post()
@@ -87,25 +90,53 @@ public class AiChatService {
                     return data;
                 })
                 .doOnComplete(() -> {
-                    ChatMessage aiMessage = ChatMessage.builder()
-                            .messageId(UUID.randomUUID().toString())
-                            .roomId(roomId)
-                            .senderId(AI_SENDER_ID)
-                            .contentType("TEXT")
-                            .content(new MessageContent.TextContent(fullResponse.toString()))
-                            .createdAt(Instant.now())
-                            .build();
-                    chatMessageRepository.save(aiMessage);
-
-                    directChatRoomService.updateLastMessage(roomId, ChatRoom.LastMessage.builder()
-                            .content(fullResponse.toString())
-                            .contentType("TEXT")
-                            .senderId(AI_SENDER_ID)
-                            .createdAt(aiMessage.getCreatedAt())
-                            .build());
-
-                    log.info("AI 응답 저장 완료: roomId={}", roomId);
+                    saveAiResponse(roomId, fullResponse, saved, "완료");
                 })
-                .doOnError(e -> log.error("AI 스트리밍 에러: roomId={}", roomId, e));
+                .doOnCancel(() -> {
+                    saveAiResponse(roomId, fullResponse, saved, "중단(사용자 이탈)");
+                })
+                .doOnError(e -> {
+                    log.error("AI 스트리밍 에러: roomId={}", roomId, e);
+                    saveAiResponse(roomId, fullResponse, saved, "에러");
+                });
+    }
+
+    /**
+     * AI 응답을 DB에 저장 (complete/cancel/error 중 한 번만 실행)
+     */
+    private void saveAiResponse(String roomId, StringBuilder fullResponse,
+                                 AtomicBoolean saved, String reason) {
+        if (!saved.compareAndSet(false, true)) {
+            return; // 이미 저장됨
+        }
+
+        String content = fullResponse.toString();
+        if (content.isBlank()) {
+            log.info("AI 응답 {} → 저장할 내용 없음: roomId={}", reason, roomId);
+            return;
+        }
+
+        try {
+            ChatMessage aiMessage = ChatMessage.builder()
+                    .messageId(UUID.randomUUID().toString())
+                    .roomId(roomId)
+                    .senderId(AI_SENDER_ID)
+                    .contentType("TEXT")
+                    .content(new MessageContent.TextContent(content))
+                    .createdAt(Instant.now())
+                    .build();
+            chatMessageRepository.save(aiMessage);
+
+            directChatRoomService.updateLastMessage(roomId, ChatRoom.LastMessage.builder()
+                    .content(content)
+                    .contentType("TEXT")
+                    .senderId(AI_SENDER_ID)
+                    .createdAt(aiMessage.getCreatedAt())
+                    .build());
+
+            log.info("AI 응답 저장 {} : roomId={}, length={}", reason, roomId, content.length());
+        } catch (Exception e) {
+            log.error("AI 응답 저장 실패: roomId={}, reason={}", roomId, reason, e);
+        }
     }
 }
