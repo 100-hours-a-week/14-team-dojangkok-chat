@@ -3,8 +3,6 @@ package com.dojangkok.chat.domain;
 import lombok.Builder;
 import lombok.Getter;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.CompoundIndex;
-import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
@@ -13,14 +11,6 @@ import java.util.stream.Collectors;
 
 @Getter
 @Document(collection = "chat_rooms")
-@CompoundIndexes({
-        @CompoundIndex(name = "idx_type_participants_property", def = "{'type': 1, 'participants': 1, 'propertyId': 1}"),
-        @CompoundIndex(name = "idx_participants_lastmsg", def = "{'participants': 1, 'lastMessage.createdAt': -1}"),
-        @CompoundIndex(name = "idx_type_participants_easycontract", def = "{'type': 1, 'participants': 1, 'easyContractId': 1}", sparse = true),
-
-        // 중복 방지용: 정렬된 참가자 문자열 + 타입 + 매물ID로 유니크 보장
-        @CompoundIndex(name = "idx_unique_room", def = "{'type': 1, 'participantsKey': 1, 'propertyId': 1}", unique = true, sparse = true)
-})
 public class ChatRoom {
 
     @Id
@@ -29,7 +19,9 @@ public class ChatRoom {
     private String type;
     private List<String> participants;
 
-    private String participantsKey;
+    // 중복 방지용: "DIRECT:1:2:property:4" 또는 "AI:3:AI_ASSISTANT:contract:212" 형태
+    // 배열에는 unique index를 걸 수 없으므로, 이 스칼라 필드로 유니크 보장
+    private String roomKey;
 
     // 매물 스냅샷
     private String propertyId;
@@ -71,9 +63,7 @@ public class ChatRoom {
         this.roomId = roomId;
         this.type = type;
         this.participants = participants;
-        this.participantsKey = participants != null
-                ? participants.stream().sorted().collect(Collectors.joining(":"))
-                : null;
+        this.roomKey = buildRoomKey(type, participants, propertyId, easyContractId);
         this.propertyId = propertyId;
         this.propertyTitle = propertyTitle;
         this.propertyImageUrl = propertyImageUrl;
@@ -94,5 +84,23 @@ public class ChatRoom {
     public void updatePropertySnapshot(String propertyTitle, String propertyImageUrl) {
         this.propertyTitle = propertyTitle;
         this.propertyImageUrl = propertyImageUrl;
+    }
+
+    /**
+     * 채팅방 유니크 키 생성
+     * DIRECT 방: "DIRECT:1:2:property:4"
+     * AI 방:     "AI:3:AI_ASSISTANT:contract:212"
+     */
+    private static String buildRoomKey(String type, List<String> participants,
+                                        String propertyId, String easyContractId) {
+        if (participants == null || type == null) return null;
+        String sortedParticipants = participants.stream().sorted().collect(Collectors.joining(":"));
+        if (propertyId != null) {
+            return type + ":" + sortedParticipants + ":property:" + propertyId;
+        }
+        if (easyContractId != null) {
+            return type + ":" + sortedParticipants + ":contract:" + easyContractId;
+        }
+        return type + ":" + sortedParticipants;
     }
 }
