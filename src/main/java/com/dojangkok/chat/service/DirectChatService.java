@@ -7,9 +7,11 @@ import com.dojangkok.chat.domain.ChatMessage;
 import com.dojangkok.chat.domain.ChatRoom;
 import com.dojangkok.chat.dto.MessageContent;
 import com.dojangkok.chat.dto.event.ChatMessageEvent;
+import com.dojangkok.chat.dto.event.ChatNotificationEvent;
 import com.dojangkok.chat.dto.chat.SendMessageRequest;
 import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageResponse;
+import com.dojangkok.chat.listener.ChatNotificationProducer;
 import com.dojangkok.chat.mapper.ChatMessageMapper;
 import com.dojangkok.chat.repository.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ public class DirectChatService {
     private final DirectChatReadStatusService directChatReadStatusService;
     private final ChatMessageMapper chatMessageMapper;
     private final RabbitTemplate rabbitTemplate;
+    private final ChatNotificationProducer chatNotificationProducer;
 
     public void sendMessage(String senderId, SendMessageRequest request) {
         ChatRoom room = directChatRoomService.getRoomByRoomId(request.getRoomId());
@@ -82,6 +85,27 @@ public class DirectChatService {
 
         rabbitTemplate.convertAndSend(RabbitMQChatConfig.CHAT_FANOUT_EXCHANGE, "", event);
         log.info("메시지 발행: roomId={}, senderId={}, contentType={}", request.getRoomId(), senderId, request.getContentType());
+
+        // 메인 서버로 채팅 알림 발행 (SSE 전달용)
+        ChatRoom.ParticipantInfo senderProfile = room.getParticipantProfiles().stream()
+                .filter(p -> p.getUserId().equals(senderId))
+                .findFirst()
+                .orElse(null);
+
+        ChatNotificationEvent notificationEvent = ChatNotificationEvent.builder()
+                .type("chat-message")
+                .messageId(message.getMessageId())
+                .roomId(message.getRoomId())
+                .senderId(senderId)
+                .senderNickname(senderProfile != null ? senderProfile.getNickname() : null)
+                .senderProfileImageUrl(senderProfile != null ? senderProfile.getProfileImageUrl() : null)
+                .targetMemberId(Long.parseLong(targetUserId))
+                .contentType(message.getContentType())
+                .preview(preview)
+                .createdAt(message.getCreatedAt())
+                .build();
+
+        chatNotificationProducer.sendNotification(notificationEvent);
     }
 
     public ChatMessageListResponse getMessagesWithMarkRead(String userId, String roomId, Instant before, int size) {
