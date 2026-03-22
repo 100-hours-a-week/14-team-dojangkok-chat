@@ -6,6 +6,7 @@ import com.dojangkok.chat.common.enums.Code;
 import com.dojangkok.chat.dto.chatroom.CreateRoomRequest;
 import com.dojangkok.chat.dto.chatroom.CreateRoomResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
+import com.dojangkok.chat.dto.chatroom.ChatMessageSyncResponse;
 import com.dojangkok.chat.dto.chatroom.ChatRoomDetailResponse;
 import com.dojangkok.chat.dto.chatroom.ChatRoomListResponse;
 import com.dojangkok.chat.service.DirectChatService;
@@ -54,5 +55,14 @@ public class ChatRoomController {
             @RequestParam(defaultValue = "20") int size) {
         ChatMessageListResponse response = directChatService.getMessagesWithMarkRead(userId, roomId, before, size);
         return new DataResponseDto<>(Code.SUCCESS, "메시지 조회에 성공하였습니다.", response);
+    }
+
+    @GetMapping("/{roomId}/messages/sync")
+    public DataResponseDto<ChatMessageSyncResponse> syncMessages(
+            @CurrentMemberId String userId,
+            @PathVariable String roomId,
+            @RequestParam String after) {
+        ChatMessageSyncResponse response = directChatService.syncMessages(userId, roomId, after);
+        return new DataResponseDto<>(Code.SUCCESS, "메시지 동기화에 성공하였습니다.", response);
     }
 }

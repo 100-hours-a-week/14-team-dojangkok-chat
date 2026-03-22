@@ -11,6 +11,7 @@ import com.dojangkok.chat.dto.event.ChatNotificationEvent;
 import com.dojangkok.chat.dto.chat.SendMessageRequest;
 import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageResponse;
+import com.dojangkok.chat.dto.chatroom.ChatMessageSyncResponse;
 import com.dojangkok.chat.listener.ChatNotificationProducer;
 import com.dojangkok.chat.mapper.ChatMessageMapper;
 import com.dojangkok.chat.repository.ChatMessageRepository;
@@ -136,6 +137,35 @@ public class DirectChatService {
         }
         return chatMessageRepository.findByRoomIdAndCreatedAtBeforeOrderByCreatedAtDesc(
                 roomId, before, PageRequest.of(0, size));
+    }
+
+    public ChatMessageSyncResponse syncMessages(String userId, String roomId, String afterMessageId) {
+        ChatRoom room = directChatRoomService.getRoomByRoomId(roomId);
+
+        if (!room.getParticipants().contains(userId)) {
+            throw new GeneralException(Code.CHAT_ROOM_ACCESS_DENIED);
+        }
+
+        // afterMessageId로 해당 메시지의 createdAt 조회
+        ChatMessage afterMessage = chatMessageRepository.findByMessageId(afterMessageId)
+                .orElseThrow(() -> new GeneralException(Code.CHAT_MESSAGE_NOT_FOUND));
+
+        // 그 시점 이후 메시지를 오래된순(ASC)으로 조회 (최대 100건)
+        List<ChatMessage> syncedMessages = chatMessageRepository
+                .findByRoomIdAndCreatedAtAfterOrderByCreatedAtAsc(
+                        roomId, afterMessage.getCreatedAt(), PageRequest.of(0, 100));
+
+        List<ChatMessageResponse> responses = syncedMessages.stream()
+                .map(msg -> chatMessageMapper.toResponse(msg, userId))
+                .toList();
+
+        log.info("메시지 동기화: roomId={}, afterMessageId={}, syncedCount={}",
+                roomId, afterMessageId, responses.size());
+
+        return ChatMessageSyncResponse.builder()
+                .messages(responses)
+                .syncedCount(responses.size())
+                .build();
     }
 
     private MessageContent createContent(SendMessageRequest request) {
