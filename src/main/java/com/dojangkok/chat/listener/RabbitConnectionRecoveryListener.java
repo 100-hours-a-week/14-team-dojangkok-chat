@@ -23,7 +23,6 @@ public class RabbitConnectionRecoveryListener implements ConnectionListener {
     private final WebSocketSessionManager sessionManager;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // 최초 연결은 SYNC 불필요 — 재연결부터 감지
     private final AtomicBoolean initialConnectionDone = new AtomicBoolean(false);
 
     @PostConstruct
@@ -39,8 +38,16 @@ public class RabbitConnectionRecoveryListener implements ConnectionListener {
             return;
         }
 
-        log.warn("[MQ Recovery] RabbitMQ 재연결 감지 — SYNC_REQUIRED 브로드캐스트 시작");
+        log.warn("[MQ Recovery] RabbitMQ 재연결 감지 — SYNC_REQUIRED 브로드캐스트");
+        broadcastSyncRequired();
+    }
 
+    @Override
+    public void onClose(Connection connection) {
+        log.warn("[MQ Recovery] RabbitMQ 연결 끊김 감지");
+    }
+
+    private void broadcastSyncRequired() {
         Set<String> onlineUserIds = sessionManager.getOnlineUserIds();
         if (onlineUserIds.isEmpty()) {
             log.info("[MQ Recovery] 온라인 유저 없음 — 브로드캐스트 생략");
@@ -59,10 +66,5 @@ public class RabbitConnectionRecoveryListener implements ConnectionListener {
         }
 
         log.warn("[MQ Recovery] SYNC_REQUIRED 브로드캐스트 완료: {} 명", onlineUserIds.size());
-    }
-
-    @Override
-    public void onClose(Connection connection) {
-        log.warn("[MQ Recovery] RabbitMQ 연결 끊김 감지");
     }
 }
