@@ -1,6 +1,6 @@
 package com.dojangkok.chat.service;
 
-import com.dojangkok.chat.common.config.RabbitMQChatConfig;
+import com.dojangkok.chat.mq.config.RabbitMQChatConfig;
 import com.dojangkok.chat.common.enums.Code;
 import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatMessage;
@@ -12,7 +12,7 @@ import com.dojangkok.chat.dto.chat.SendMessageRequest;
 import com.dojangkok.chat.dto.chatroom.ChatMessageListResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageResponse;
 import com.dojangkok.chat.dto.chatroom.ChatMessageSyncResponse;
-import com.dojangkok.chat.listener.ChatNotificationProducer;
+import com.dojangkok.chat.mq.ChatNotificationProducer;
 import com.dojangkok.chat.mapper.ChatMessageMapper;
 import com.dojangkok.chat.repository.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;

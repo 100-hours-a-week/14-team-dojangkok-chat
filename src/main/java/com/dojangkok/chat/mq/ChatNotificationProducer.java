@@ -1,7 +1,7 @@
-package com.dojangkok.chat.listener;
+package com.dojangkok.chat.mq;
 
-import com.dojangkok.chat.common.config.RabbitMQChatConfig;
 import com.dojangkok.chat.dto.event.ChatNotificationEvent;
+import com.dojangkok.chat.mq.config.RabbitMQChatConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -17,7 +17,7 @@ public class ChatNotificationProducer {
     public void sendNotification(ChatNotificationEvent event) {
         rabbitTemplate.convertAndSend(
                 RabbitMQChatConfig.NOTIFICATION_EXCHANGE,
-                "chat.notification",
+                "quorum.notification",
                 event
         );
         log.info("채팅 알림 발행: targetMemberId={}, roomId={}, messageId={}",

@@ -101,4 +101,11 @@ public class PropertyCacheService {
             log.warn("매물 정보 캐시 저장 실패: key={}", key, e);
         }
     }
+
+    public void evict(String propertyId) {
+        if (propertyId == null || propertyId.isBlank()) return;
+        String key = KEY_PREFIX + propertyId;
+        redisTemplate.delete(key);
+        log.info("매물 정보 캐시 삭제: propertyId={}", propertyId);
+    }
 }

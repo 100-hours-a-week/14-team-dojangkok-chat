@@ -18,4 +18,10 @@ public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {
     List<ChatRoom> findByParticipantsContainingAndLastMessageIsNotNullOrderByLastMessage_CreatedAtDesc(String userId);
 
     Optional<ChatRoom> findByTypeAndParticipantsContainingAndEasyContractId(String type, String userId, String easyContractId);
+
+    // 특정 유저가 참여한 모든 채팅방 조회 (스냅샷 업데이트용)
+    List<ChatRoom> findByParticipantsContaining(String userId);
+
+    // 특정 매물 ID를 가진 모든 채팅방 조회 (스냅샷 업데이트용)
+    List<ChatRoom> findByPropertyId(String propertyId);
 }

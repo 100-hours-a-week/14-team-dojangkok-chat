@@ -85,4 +85,10 @@ public class UserProfileCacheService {
             log.warn("유저 프로필 캐시 저장 실패: key={}", key, e);
         }
     }
+
+    public void evict(String userId) {
+        String key = KEY_PREFIX + userId;
+        redisTemplate.delete(key);
+        log.info("유저 프로필 캐시 삭제: userId={}", userId);
+    }
 }

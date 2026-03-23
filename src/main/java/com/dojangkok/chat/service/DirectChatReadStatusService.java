@@ -1,6 +1,6 @@
 package com.dojangkok.chat.service;
 
-import com.dojangkok.chat.common.config.RabbitMQChatConfig;
+import com.dojangkok.chat.mq.config.RabbitMQChatConfig;
 import com.dojangkok.chat.common.enums.Code;
 import com.dojangkok.chat.common.exception.GeneralException;
 import com.dojangkok.chat.domain.ChatMessage;

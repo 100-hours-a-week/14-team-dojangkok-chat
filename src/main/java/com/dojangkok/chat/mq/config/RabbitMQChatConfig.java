@@ -1,4 +1,4 @@
-package com.dojangkok.chat.common.config;
+package com.dojangkok.chat.mq.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.*;
@@ -15,9 +15,11 @@ import java.util.UUID;
 public class RabbitMQChatConfig {
 
     public static final String NOTIFICATION_QUEUE = "quorum.notification";
+    public static final String DATA_EVENTS_QUEUE = "quorum.data";
 
     public static final String CHAT_FANOUT_EXCHANGE = "chat.fanout";
     public static final String NOTIFICATION_EXCHANGE = "notification.events";
+    public static final String DATA_EVENTS_EXCHANGE = "data.events";
     public static final String DLX_EXCHANGE = "dlx.exchange";
 
     @Bean
@@ -32,26 +34,6 @@ public class RabbitMQChatConfig {
     }
 
     @Bean
-    public Binding chatQueueBinding(Queue chatInstanceQueue, FanoutExchange chatFanoutExchange) {
-        return BindingBuilder.bind(chatInstanceQueue).to(chatFanoutExchange);
-    }
-
-    @Bean
-    public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
-        return new Jackson2JsonMessageConverter(objectMapper);
-    }
-
-    @Bean
-    public DirectExchange notificationExchange() {
-        return new DirectExchange(NOTIFICATION_EXCHANGE);
-    }
-
-    @Bean
-    public DirectExchange dlxExchange() {
-        return new DirectExchange(DLX_EXCHANGE);
-    }
-
-    @Bean
     public Queue notificationQueue() {
         return QueueBuilder.durable(NOTIFICATION_QUEUE)
                 .deadLetterExchange(DLX_EXCHANGE)
@@ -62,9 +44,51 @@ public class RabbitMQChatConfig {
     }
 
     @Bean
+    public Queue dataEventsQueue() {
+        return QueueBuilder.durable(DATA_EVENTS_QUEUE)
+                .deadLetterExchange(DLX_EXCHANGE)
+                .deadLetterRoutingKey("quorum.data")
+                .ttl(300000)
+                .quorum()
+                .build();
+    }
+
+    @Bean
+    public Binding chatQueueBinding(Queue chatInstanceQueue, FanoutExchange chatFanoutExchange) {
+        return BindingBuilder.bind(chatInstanceQueue).to(chatFanoutExchange);
+    }
+
+    @Bean
     public Binding notificationBinding(Queue notificationQueue, DirectExchange notificationExchange) {
         return BindingBuilder.bind(notificationQueue)
-                .to(notificationExchange).with("chat.notification");
+                .to(notificationExchange).with("quorum.notification");
+    }
+
+    @Bean
+    public Binding dataEventsBinding(Queue dataEventsQueue, DirectExchange dataEventsExchange) {
+        return BindingBuilder.bind(dataEventsQueue)
+                .to(dataEventsExchange).with("quorum.data");
+    }
+
+    @Bean
+    public DirectExchange notificationExchange() {
+        return new DirectExchange(NOTIFICATION_EXCHANGE);
+    }
+
+    @Bean
+    public DirectExchange dataEventsExchange() {
+        return new DirectExchange(DATA_EVENTS_EXCHANGE);
+    }
+
+    @Bean
+    public DirectExchange dlxExchange() {
+        return new DirectExchange(DLX_EXCHANGE);
+    }
+
+
+    @Bean
+    public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
     }
 
     @Bean
