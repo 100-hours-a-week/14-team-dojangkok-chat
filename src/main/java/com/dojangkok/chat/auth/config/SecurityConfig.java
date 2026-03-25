@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/test-ws.html").permitAll()
                         .requestMatchers("/api/chat/ws").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/api/chat/internal/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
