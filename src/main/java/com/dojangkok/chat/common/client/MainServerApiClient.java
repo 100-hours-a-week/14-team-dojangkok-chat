@@ -5,6 +5,7 @@ import com.dojangkok.chat.dto.cache.CachedUserProfile;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -13,20 +14,28 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class MainServerApiClient {
 
-    private final RestClient mainServerRestClient;
+    private final RestClient restClient;
+
+    @Value("${app.main-server.url}")
+    private String mainServerUrl;
+
+    @Value("${app.main-server.api-key}")
+    private String internalApiKey;
 
     @CircuitBreaker(name = "mainServerApi", fallbackMethod = "fallbackUserProfile")
     public CachedUserProfile fetchUserProfile(String userId) {
-        return mainServerRestClient.get()
-                .uri("/api/internal/users/{userId}", userId)
+        return restClient.get()
+                .uri(mainServerUrl + "/api/internal/users/{userId}", userId)
+                .header("X-Internal-Api-Key", internalApiKey)
                 .retrieve()
                 .body(CachedUserProfile.class);
     }
 
     @CircuitBreaker(name = "mainServerApi", fallbackMethod = "fallbackPropertyInfo")
     public CachedPropertyInfo fetchPropertyInfo(String propertyId) {
-        return mainServerRestClient.get()
-                .uri("/api/internal/properties/{propertyId}", propertyId)
+        return restClient.get()
+                .uri(mainServerUrl + "/api/internal/properties/{propertyId}", propertyId)
+                .header("X-Internal-Api-Key", internalApiKey)
                 .retrieve()
                 .body(CachedPropertyInfo.class);
     }
