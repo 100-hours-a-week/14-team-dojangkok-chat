@@ -7,14 +7,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MainServerApiClient {
 
-    private final WebClient.Builder webClientBuilder;
+    private final RestClient restClient;
 
     @Value("${app.main-server.url}")
     private String mainServerUrl;
@@ -24,24 +24,20 @@ public class MainServerApiClient {
 
     @CircuitBreaker(name = "mainServerApi", fallbackMethod = "fallbackUserProfile")
     public CachedUserProfile fetchUserProfile(String userId) {
-        return webClientBuilder.build()
-                .get()
+        return restClient.get()
                 .uri(mainServerUrl + "/api/internal/users/{userId}", userId)
                 .header("X-Internal-Api-Key", internalApiKey)
                 .retrieve()
-                .bodyToMono(CachedUserProfile.class)
-                .block();
+                .body(CachedUserProfile.class);
     }
 
     @CircuitBreaker(name = "mainServerApi", fallbackMethod = "fallbackPropertyInfo")
     public CachedPropertyInfo fetchPropertyInfo(String propertyId) {
-        return webClientBuilder.build()
-                .get()
+        return restClient.get()
                 .uri(mainServerUrl + "/api/internal/properties/{propertyId}", propertyId)
                 .header("X-Internal-Api-Key", internalApiKey)
                 .retrieve()
-                .bodyToMono(CachedPropertyInfo.class)
-                .block();
+                .body(CachedPropertyInfo.class);
     }
 
     private CachedUserProfile fallbackUserProfile(String userId, Throwable t) {
