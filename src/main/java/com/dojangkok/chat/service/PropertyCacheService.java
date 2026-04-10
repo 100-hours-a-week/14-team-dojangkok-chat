@@ -4,8 +4,9 @@ import com.dojangkok.chat.common.client.MainServerApiClient;
 import com.dojangkok.chat.dto.cache.CachedPropertyInfo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,14 +14,15 @@ import java.time.Duration;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class PropertyCacheService {
 
     private static final String KEY_PREFIX = "chat:property:";
     private static final String LOCK_PREFIX = "chat:property:lock:";
     private static final Duration TTL = Duration.ofMinutes(10);
     private static final Duration LOCK_TTL = Duration.ofSeconds(5);
-    private static final int LOCK_RETRY_MAX = 3;
-    private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(200);
+    private static final int LOCK_RETRY_MAX = 15;
+    private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(300);
 
     // Redis 기반 테스트 통계 키 (다중 인스턴스 합산)
     private static final String STATS_HIT_KEY = "chat:test:stats:hit";
@@ -29,21 +31,6 @@ public class PropertyCacheService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final MainServerApiClient mainServerApiClient;
-    private final boolean useLock;
-
-    public PropertyCacheService(
-            StringRedisTemplate redisTemplate,
-            ObjectMapper objectMapper,
-            MainServerApiClient mainServerApiClient,
-            @Value("${cache.property.use-lock:true}") boolean useLock
-    ) {
-        this.redisTemplate = redisTemplate;
-        this.objectMapper = objectMapper;
-        this.mainServerApiClient = mainServerApiClient;
-        this.useLock = useLock;
-        log.info("PropertyCacheService 초기화 — 분산 락 사용: {}", useLock);
-    }
-
     public CachedPropertyInfo getProperty(String propertyId) {
         if (propertyId == null || propertyId.isBlank()) {
             return CachedPropertyInfo.builder()
@@ -72,17 +59,11 @@ public class PropertyCacheService {
             }
         }
 
-        // 2. 락 사용 여부에 따라 분기
-        if (useLock) {
-            return getPropertyWithLock(propertyId, key);
-        } else {
-            return getPropertyWithoutLock(propertyId, key);
-        }
+        // 2. 분산 락으로 스탬피드 방어
+        return getPropertyWithLock(propertyId, key);
     }
 
-    /**
-     * 분산 락 적용: SETNX 뮤텍스로 스탬피드 방어
-     */
+    // 분산 락 적용: SETNX 뮤텍스로 스탬피드 방어
     private CachedPropertyInfo getPropertyWithLock(String propertyId, String key) {
         String lockKey = LOCK_PREFIX + propertyId;
         Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
@@ -124,25 +105,9 @@ public class PropertyCacheService {
             }
         }
 
-        // 대기 후에도 캐시 없으면 직접 호출 (fallback)
-        incrementMiss();
-        log.warn("매물 캐시 락 대기 실패, 직접 호출: propertyId={}", propertyId);
-        return mainServerApiClient.fetchPropertyInfo(propertyId);
-    }
-
-    /**
-     * 분산 락 미적용: 캐시 miss 시 바로 메인 서버 호출 (스탬피드 방어 없음)
-     */
-    private CachedPropertyInfo getPropertyWithoutLock(String propertyId, String key) {
-        incrementMiss();
-        log.info("매물 정보 cache miss → 메인 서버 호출 (락 없음): propertyId={}", propertyId);
-        CachedPropertyInfo property = mainServerApiClient.fetchPropertyInfo(propertyId);
-
-        if (property != null && !"알 수 없음".equals(property.getTitle())) {
-            cacheProperty(key, property);
-        }
-
-        return property;
+        // 대기 후에도 캐시 없으면 null 반환 → 호출부에서 기존 스냅샷 사용
+        log.warn("매물 캐시 락 대기 실패, 스냅샷 fallback: propertyId={}", propertyId);
+        return null;
     }
 
     private void cacheProperty(String key, CachedPropertyInfo property) {
