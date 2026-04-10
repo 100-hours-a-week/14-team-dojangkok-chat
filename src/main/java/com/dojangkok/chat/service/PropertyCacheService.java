@@ -21,8 +21,8 @@ public class PropertyCacheService {
     private static final String LOCK_PREFIX = "chat:property:lock:";
     private static final Duration TTL = Duration.ofMinutes(10);
     private static final Duration LOCK_TTL = Duration.ofSeconds(5);
-    private static final int LOCK_RETRY_MAX = 20;
-    private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(50);
+    private static final int LOCK_RETRY_MAX = 15;
+    private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(150);
 
     // Redis 기반 테스트 통계 키 (다중 인스턴스 합산)
     private static final String STATS_HIT_KEY = "chat:test:stats:hit";
