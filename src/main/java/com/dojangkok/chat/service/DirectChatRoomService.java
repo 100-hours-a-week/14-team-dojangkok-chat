@@ -168,20 +168,28 @@ public class DirectChatRoomService {
     @Async
     public void asyncReadRepairProfiles(ChatRoom room,
                                         List<ChatRoom.ParticipantInfo> latestParticipantInfos) {
-        if (isProfileChanged(room.getParticipantProfiles(), latestParticipantInfos)) {
-            room.updateParticipantProfiles(latestParticipantInfos);
-            chatRoomRepository.save(room);
-            log.info("Read-Repair: 참여자 프로필 스냅샷 갱신 완료 roomId={}", room.getRoomId());
+        try {
+            if (isProfileChanged(room.getParticipantProfiles(), latestParticipantInfos)) {
+                room.updateParticipantProfiles(latestParticipantInfos);
+                chatRoomRepository.save(room);
+                log.info("Read-Repair: 참여자 프로필 스냅샷 갱신 완료 roomId={}", room.getRoomId());
+            }
+        } catch (Exception e) {
+            log.warn("Read-Repair 실패 (프로필): roomId={} — 다음 조회 시 재시도됩니다. reason={}", room.getRoomId(), e.getMessage());
         }
     }
 
     @Async
     public void asyncReadRepairProperty(ChatRoom room,
                                         CachedPropertyInfo latestProperty) {
-        if (isPropertyChanged(room, latestProperty)) {
-            room.updatePropertySnapshot(latestProperty.getTitle(), latestProperty.getImageUrl());
-            chatRoomRepository.save(room);
-            log.info("Read-Repair: 매물 정보 스냅샷 갱신 완료 roomId={}", room.getRoomId());
+        try {
+            if (isPropertyChanged(room, latestProperty)) {
+                room.updatePropertySnapshot(latestProperty.getTitle(), latestProperty.getImageUrl());
+                chatRoomRepository.save(room);
+                log.info("Read-Repair: 매물 정보 스냅샷 갱신 완료 roomId={}", room.getRoomId());
+            }
+        } catch (Exception e) {
+            log.warn("Read-Repair 실패 (매물): roomId={} — 다음 조회 시 재시도됩니다. reason={}", room.getRoomId(), e.getMessage());
         }
     }
 

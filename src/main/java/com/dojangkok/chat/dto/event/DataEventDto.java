@@ -3,11 +3,14 @@ package com.dojangkok.chat.dto.event;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 @Getter
 @NoArgsConstructor
 public class DataEventDto {
 
     private String type;
+    private Instant eventTimestamp;
 
     // USER_UPDATED, USER_DELETED
     private String userId;

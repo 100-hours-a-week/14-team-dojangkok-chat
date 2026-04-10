@@ -48,6 +48,11 @@ public class DataEventConsumer {
         // 2. MongoDB 스냅샷 업데이트
         List<ChatRoom> rooms = chatRoomRepository.findByParticipantsContaining(userId);
         for (ChatRoom room : rooms) {
+            if (room.isStaleEvent(event.getEventTimestamp())) {
+                log.warn("out-of-order 이벤트 감지, skip: type=USER_UPDATED, userId={}, roomId={}", userId, room.getRoomId());
+                continue;
+            }
+
             List<ChatRoom.ParticipantInfo> updatedProfiles = room.getParticipantProfiles().stream()
                     .map(p -> p.getUserId().equals(userId)
                             ? ChatRoom.ParticipantInfo.builder()
@@ -58,6 +63,7 @@ public class DataEventConsumer {
                             : p)
                     .toList();
             room.updateParticipantProfiles(updatedProfiles);
+            room.markEventTimestamp(event.getEventTimestamp());
             chatRoomRepository.save(room);
         }
 
@@ -73,6 +79,11 @@ public class DataEventConsumer {
         // 2. MongoDB 스냅샷에 탈퇴 표시
         List<ChatRoom> rooms = chatRoomRepository.findByParticipantsContaining(userId);
         for (ChatRoom room : rooms) {
+            if (room.isStaleEvent(event.getEventTimestamp())) {
+                log.warn("out-of-order 이벤트 감지, skip: type=USER_DELETED, userId={}, roomId={}", userId, room.getRoomId());
+                continue;
+            }
+
             List<ChatRoom.ParticipantInfo> updatedProfiles = room.getParticipantProfiles().stream()
                     .map(p -> p.getUserId().equals(userId)
                             ? ChatRoom.ParticipantInfo.builder()
@@ -83,6 +94,7 @@ public class DataEventConsumer {
                             : p)
                     .toList();
             room.updateParticipantProfiles(updatedProfiles);
+            room.markEventTimestamp(event.getEventTimestamp());
             chatRoomRepository.save(room);
         }
 
@@ -98,10 +110,16 @@ public class DataEventConsumer {
         // 2. MongoDB 스냅샷 업데이트
         List<ChatRoom> rooms = chatRoomRepository.findByPropertyId(propertyId);
         for (ChatRoom room : rooms) {
+            if (room.isStaleEvent(event.getEventTimestamp())) {
+                log.warn("out-of-order 이벤트 감지, skip: type=PROPERTY_UPDATED, propertyId={}, roomId={}", propertyId, room.getRoomId());
+                continue;
+            }
+
             if (event.getTitle() != null) {
                 room.updatePropertySnapshot(event.getTitle(),
                         event.getImageUrl() != null ? event.getImageUrl() : room.getPropertyImageUrl());
             }
+            room.markEventTimestamp(event.getEventTimestamp());
             chatRoomRepository.save(room);
         }
 
@@ -117,7 +135,13 @@ public class DataEventConsumer {
         // 2. MongoDB 스냅샷에 삭제 표시
         List<ChatRoom> rooms = chatRoomRepository.findByPropertyId(propertyId);
         for (ChatRoom room : rooms) {
+            if (room.isStaleEvent(event.getEventTimestamp())) {
+                log.warn("out-of-order 이벤트 감지, skip: type=PROPERTY_DELETED, propertyId={}, roomId={}", propertyId, room.getRoomId());
+                continue;
+            }
+
             room.updatePropertySnapshot("삭제된 매물", null);
+            room.markEventTimestamp(event.getEventTimestamp());
             chatRoomRepository.save(room);
         }
 

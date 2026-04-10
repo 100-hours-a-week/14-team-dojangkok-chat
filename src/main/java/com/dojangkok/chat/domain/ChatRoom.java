@@ -37,6 +37,9 @@ public class ChatRoom {
     private LastMessage lastMessage;
     private Instant createdAt;
 
+    // 이벤트 순서 보장용: 마지막으로 처리된 data.events 이벤트 시점
+    private Instant lastEventTimestamp;
+
     @Getter
     @Builder
     public static class ParticipantInfo {
@@ -84,6 +87,16 @@ public class ChatRoom {
     public void updatePropertySnapshot(String propertyTitle, String propertyImageUrl) {
         this.propertyTitle = propertyTitle;
         this.propertyImageUrl = propertyImageUrl;
+    }
+
+    public void markEventTimestamp(Instant eventTimestamp) {
+        this.lastEventTimestamp = eventTimestamp;
+    }
+
+    public boolean isStaleEvent(Instant eventTimestamp) {
+        if (eventTimestamp == null) return false;
+        if (this.lastEventTimestamp == null) return false;
+        return eventTimestamp.isBefore(this.lastEventTimestamp);
     }
 
     /**
