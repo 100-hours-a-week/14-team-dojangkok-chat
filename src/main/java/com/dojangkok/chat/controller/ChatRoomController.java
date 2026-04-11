@@ -42,8 +42,9 @@ public class ChatRoomController {
     @GetMapping("/{roomId}")
     public DataResponseDto<ChatRoomDetailResponse> getRoomDetail(
             @CurrentMemberId String userId,
-            @PathVariable String roomId) {
-        ChatRoomDetailResponse response = directChatRoomService.getRoomDetail(userId, roomId);
+            @PathVariable String roomId,
+            @RequestParam(defaultValue = "false") boolean legacy) {
+        ChatRoomDetailResponse response = directChatRoomService.getRoomDetail(userId, roomId, legacy);
         return new DataResponseDto<>(Code.SUCCESS, "채팅방 상세 조회에 성공하였습니다.", response);
     }
 

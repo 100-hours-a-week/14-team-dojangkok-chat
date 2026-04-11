@@ -36,6 +36,7 @@ public class DirectChatRoomService {
     private final ChatReadStatusRepository chatReadStatusRepository;
     private final UserProfileCacheService userProfileCacheService;
     private final PropertyCacheService propertyCacheService;
+    private final PropertyCacheLegacyService propertyCacheLegacyService;
     private final ChatRoomMapper chatRoomMapper;
 
     public CreateRoomResponse getOrCreateDirectChatRoom(String userId, CreateRoomRequest request) {
@@ -101,7 +102,7 @@ public class DirectChatRoomService {
         return chatRoomMapper.toListResponse(roomResponses);
     }
 
-    public ChatRoomDetailResponse getRoomDetail(String userId, String roomId) {
+    public ChatRoomDetailResponse getRoomDetail(String userId, String roomId, boolean useLegacy) {
         ChatRoom room = getRoomByRoomId(roomId);
 
         if (!room.getParticipants().contains(userId)) {
@@ -113,7 +114,9 @@ public class DirectChatRoomService {
                 .map(userProfileCacheService::getProfile)
                 .toList();
 
-        CachedPropertyInfo latestProperty = propertyCacheService.getProperty(room.getPropertyId());
+        CachedPropertyInfo latestProperty = useLegacy
+                ? propertyCacheLegacyService.getProperty(room.getPropertyId())
+                : propertyCacheService.getProperty(room.getPropertyId());
 
         // 메인 서버 응답이 유효한지 확인 (fallback 기본값이 아닌지)
         boolean profilesValid = latestProfiles.stream()
