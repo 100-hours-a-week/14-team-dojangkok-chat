@@ -4,7 +4,8 @@ import com.dojangkok.chat.common.client.MainServerApiClient;
 import com.dojangkok.chat.dto.cache.CachedPropertyInfo;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,7 +15,6 @@ import java.time.Duration;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PropertyCacheService {
 
     private static final String KEY_PREFIX = "chat:property:";
@@ -24,13 +24,28 @@ public class PropertyCacheService {
     private static final int LOCK_RETRY_MAX = 15;
     private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(50);
 
-    // Redis 기반 테스트 통계 키 (다중 인스턴스 합산)
-    private static final String STATS_HIT_KEY = "chat:test:stats:hit";
-    private static final String STATS_MISS_KEY = "chat:test:stats:miss";
-
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final MainServerApiClient mainServerApiClient;
+    private final Counter hitCounter;
+    private final Counter missCounter;
+
+    public PropertyCacheService(StringRedisTemplate redisTemplate,
+                                ObjectMapper objectMapper,
+                                MainServerApiClient mainServerApiClient,
+                                MeterRegistry meterRegistry) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.mainServerApiClient = mainServerApiClient;
+        this.hitCounter = Counter.builder("cache.property.requests")
+                .tag("result", "hit")
+                .description("Property cache hit count")
+                .register(meterRegistry);
+        this.missCounter = Counter.builder("cache.property.requests")
+                .tag("result", "miss")
+                .description("Property cache miss count")
+                .register(meterRegistry);
+    }
     public CachedPropertyInfo getProperty(String propertyId) {
         if (propertyId == null || propertyId.isBlank()) {
             return CachedPropertyInfo.builder()
@@ -126,39 +141,21 @@ public class PropertyCacheService {
         log.info("매물 정보 캐시 삭제: propertyId={}", propertyId);
     }
 
-    public int getCacheMissCount() {
-        return getStatCount(STATS_MISS_KEY);
+    public double getCacheHitCount() {
+        return hitCounter.count();
     }
 
-    public int getCacheHitCount() {
-        return getStatCount(STATS_HIT_KEY);
+    public double getCacheMissCount() {
+        return missCounter.count();
     }
 
-    public int resetCacheMissCount() {
-        return resetStatCount(STATS_MISS_KEY);
-    }
-
-    public int resetCacheHitCount() {
-        return resetStatCount(STATS_HIT_KEY);
-    }
-
-    // ── Redis 기반 통계 헬퍼 (다중 인스턴스 합산) ──
+    // ── Micrometer 카운터 헬퍼 ──
 
     private void incrementHit() {
-        redisTemplate.opsForValue().increment(STATS_HIT_KEY);
+        hitCounter.increment();
     }
 
     private void incrementMiss() {
-        redisTemplate.opsForValue().increment(STATS_MISS_KEY);
-    }
-
-    private int getStatCount(String key) {
-        String value = redisTemplate.opsForValue().get(key);
-        return value != null ? Integer.parseInt(value) : 0;
-    }
-
-    private int resetStatCount(String key) {
-        String value = redisTemplate.opsForValue().getAndDelete(key);
-        return value != null ? Integer.parseInt(value) : 0;
+        missCounter.increment();
     }
 }
