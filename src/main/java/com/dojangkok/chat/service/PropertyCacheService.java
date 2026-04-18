@@ -19,7 +19,7 @@ public class PropertyCacheService {
 
     private static final String KEY_PREFIX = "chat:property:";
     private static final String LOCK_PREFIX = "chat:property:lock:";
-    private static final Duration TTL = Duration.ofMinutes(10);
+    private static final Duration TTL = Duration.ofMinutes(5);
     private static final Duration LOCK_TTL = Duration.ofSeconds(5);
     private static final int LOCK_RETRY_MAX = 15;
     private static final Duration LOCK_RETRY_WAIT = Duration.ofMillis(50);
