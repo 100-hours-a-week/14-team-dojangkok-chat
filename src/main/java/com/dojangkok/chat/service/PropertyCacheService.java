@@ -149,7 +149,7 @@ public class PropertyCacheService {
         return missCounter.count();
     }
 
-    // ── Micrometer 카운터 헬퍼 ──
+    // Micrometer 카운터 헬퍼
 
     private void incrementHit() {
         hitCounter.increment();
