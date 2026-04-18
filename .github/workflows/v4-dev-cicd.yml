@@ -1,0 +1,129 @@
+name: Chat CI/CD (V4 EC2)
+
+on:
+  push:
+    branches: [dev]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: chat-v4-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ECR_REGISTRY: 920624925547.dkr.ecr.ap-northeast-2.amazonaws.com
+  ECR_REPO: dev-dojangkok-chatting-be
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+          cache: 'gradle'
+      - run: chmod +x gradlew
+      - run: ./gradlew bootJar --no-daemon -x test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chatting-be-jar
+          path: build/libs/*.jar
+          retention-days: 3
+
+  build-and-push:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: chatting-be-jar
+          path: build/libs
+
+      - name: Prepare JAR
+        run: |
+          JAR_FILE=$(ls build/libs/*.jar | head -1)
+          cp "$JAR_FILE" chatting-be-jar.jar
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/arm64
+          provenance: false
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${{ steps.meta.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
+            cd /home/ubuntu/dojangkok-chat
+
+            # Download config from S3
+            aws s3 cp s3://dojangkok-deploy/chatting/v4/dev/application-dev-chatting.yaml ./config/application.yaml
+            chmod 600 ./config/application.yaml
+
+            # ECR login and deploy
+            aws ecr get-login-password --region ap-northeast-2 | \
+              docker login --username AWS --password-stdin 920624925547.dkr.ecr.ap-northeast-2.amazonaws.com
+
+            docker compose pull chatting-be
+            docker compose up -d chatting-be
+            docker image prune -f
+          ENDSSH
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 15); do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}:8081/actuator/health" || echo "000")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Health check OK"
+              exit 0
+            fi
+            echo "Attempt $i/15: HTTP $HTTP_STATUS - waiting 15s..."
+            sleep 15
+          done
+          echo "Health check FAILED"
+          exit 1
